@@ -1,0 +1,28 @@
+
+# Ambiente Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Configurações locais
+.vscode/
+
+# Segredos e variáveis de ambiente
+.env
+.env.*
+
+# Mantém o exemplo de configuração
+!.env.example
+
+# Dados e arquivos gerados
+data/raw/*
+data/processed/*
+outputs/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!outputs/.gitkeep
+
+# Notebooks e cache
+.ipynb_checkpoints/
