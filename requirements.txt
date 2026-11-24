@@ -1,0 +1,39 @@
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# Interface
+streamlit
+requests
+
+# IA e orquestração
+langchain
+langchain-core
+langchain-community
+langchain-ollama
+langgraph
+
+# RAG e banco vetorial
+chromadb
+sentence-transformers
+
+# Banco de dados
+sqlalchemy
+
+# Configuração e segurança
+python-dotenv
+pydantic-settings
+
+# Documentos
+pypdf
+
+# Monitoramento e logs
+prometheus-client
+structlog
+
+# Testes
+pytest
+httpx

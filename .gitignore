@@ -1,4 +1,3 @@
-
 # Ambiente Python
 .venv/
 venv/
@@ -12,14 +11,20 @@ __pycache__/
 # Segredos e variáveis de ambiente
 .env
 .env.*
-
-# Mantém o exemplo de configuração
 !.env.example
 
-# Dados e arquivos gerados
+# Bancos de dados locais
+data/chroma_db/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Dados originais e processados
 data/raw/*
 data/processed/*
 outputs/*
+
+# Manter estrutura das pastas
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !outputs/.gitkeep
