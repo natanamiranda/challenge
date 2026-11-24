@@ -6,6 +6,8 @@ from pathlib import Path
 
 from langchain_ollama import ChatOllama
 
+from medical_assistant.anonymization import anonymize_data, anonymize_text
+from medical_assistant.audit import log_event, log_error
 from medical_assistant.config import settings
 from medical_assistant.rag import search_protocols
 from medical_assistant.safety import validate_answer
@@ -52,10 +54,7 @@ def translate_symptoms_from_source(source_text: str):
 
     translations = [
         (["fever"], "Febre"),
-        (
-            ["feeling tired", "weakness"],
-            "Cansaço ou fraqueza",
-        ),
+        (["feeling tired", "weakness"], "Cansaço ou fraqueza"),
         (["night sweats"], "Suores noturnos"),
         (
             ["easy bruising or bleeding"],
@@ -65,10 +64,7 @@ def translate_symptoms_from_source(source_text: str):
             ["petechiae"],
             "Petéquias (pequenos pontos na pele causados por sangramento)",
         ),
-        (
-            ["shortness of breath"],
-            "Falta de ar",
-        ),
+        (["shortness of breath"], "Falta de ar"),
         (["weight loss"], "Perda de peso"),
         (["loss of appetite"], "Perda de apetite"),
         (
@@ -83,10 +79,7 @@ def translate_symptoms_from_source(source_text: str):
             ["painless lumps in the neck, underarm, stomach, or groin"],
             "Caroços indolores no pescoço, axilas, abdômen ou virilha",
         ),
-        (
-            ["having many infections"],
-            "Infecções frequentes",
-        ),
+        (["having many infections"], "Infecções frequentes"),
     ]
 
     symptoms = []
@@ -193,7 +186,7 @@ def generate_llm_answer(question, documents, patient_context=None):
     glossary = load_medical_glossary()
 
     context = "\n\n".join(
-        document.page_content
+        anonymize_text(document.page_content)
         for document in documents
     )
 
@@ -202,13 +195,15 @@ def generate_llm_answer(question, documents, patient_context=None):
         for english, portuguese in glossary.items()
     )
 
+    safe_patient_context = anonymize_data(patient_context or {})
+
     patient_information = (
         json.dumps(
-            patient_context,
+            safe_patient_context,
             ensure_ascii=False,
             indent=2,
         )
-        if patient_context
+        if safe_patient_context
         else "Nenhum contexto de paciente foi fornecido."
     )
 
@@ -261,111 +256,206 @@ def generate_answer(
     if not question or not question.strip():
         raise ValueError("A pergunta não pode estar vazia.")
 
-    documents = search_protocols(question, k=3)
+    # Preserva os dados originais apenas em memória.
+    # Somente a versão anonimizada segue para o processamento.
+    safe_question = anonymize_text(question)
+    safe_patient_context = anonymize_data(patient_context or {})
 
-    if not documents:
-        return {
-            "answer": (
-                "Não foram encontradas fontes suficientes "
-                "para responder à pergunta."
-            ),
-            "sources": [],
-            "safety": {
-                "approved": False,
-                "requires_human_review": True,
-                "reason": "Nenhuma fonte foi recuperada.",
-                "detected_issues": ["no_retrieved_sources"],
-                "lexical_check_passed": False,
-                "human_review_status": "pending",
-            },
-        }
+    patient_code = None
 
-    sources = [
-        {
-            "source": document.metadata.get("source"),
-            "url": document.metadata.get("source_url"),
-        }
-        for document in documents
-    ]
-
-    question_normalized = normalize_text(question)
-
-    is_symptom_question = any(
-        term in question_normalized
-        for term in [
-            "sintoma",
-            "sintomas",
-            "sinais",
-            "symptom",
-            "symptoms",
-        ]
-    )
-
-    is_definition_question = any(
-        term in question_normalized
-        for term in [
-            "o que e",
-            "definicao",
-            "explique",
-            "what is",
-            "define",
-            "definition",
-            "explain",
-        ]
-    )
-
-    answer = None
-
-    if is_symptom_question:
-        for document in documents:
-            answer = translate_symptoms_from_source(
-                document.page_content
-            )
-
-            if answer:
-                break
-
-    elif is_definition_question:
-        for document in documents:
-            answer = translate_definition_from_source(
-                document.page_content
-            )
-
-            if answer:
-                break
-
-    if not answer:
-        answer = generate_llm_answer(
-            question=question,
-            documents=documents,
-            patient_context=patient_context,
+    if isinstance(patient_context, dict):
+        patient_code = (
+            patient_context.get("patient_code")
+            or patient_context.get("codigo_paciente")
         )
 
-    validation_sources = [
-        {"content": document.page_content}
-        for document in documents
-    ]
-
-    lexical_validation = validate_answer(
-        answer=answer,
-        sources=validation_sources,
+    log_event(
+        event="consultation_started",
+        patient_code=patient_code,
+        question=safe_question,
+        status="started",
     )
 
-    safety_result = {
-        "approved": False,
-        "requires_human_review": True,
-        "reason": (
-            "Verificações automáticas executadas. "
-            "Elas não comprovam a precisão clínica. "
-            "Aprovação humana obrigatória."
-        ),
-        "detected_issues": lexical_validation["detected_issues"],
-        "lexical_check_passed": lexical_validation["lexical_check_passed"],
-        "human_review_status": "pending",
-    }
+    try:
+        # Recuperação de documentos com a pergunta anonimizada.
+        documents = search_protocols(safe_question, k=3)
 
-    return {
-        "answer": answer,
-        "sources": sources,
-        "safety": safety_result,
-    }
+        log_event(
+            event="documents_retrieved",
+            patient_code=patient_code,
+            question=safe_question,
+            sources=[
+                {
+                    "source": document.metadata.get("source"),
+                    "url": document.metadata.get("source_url"),
+                }
+                for document in documents
+            ],
+            status="success" if documents else "no_sources",
+            details={
+                "documents_count": len(documents),
+            },
+        )
+
+        if not documents:
+            result = {
+                "answer": (
+                    "Não foram encontradas fontes suficientes "
+                    "para responder à pergunta."
+                ),
+                "sources": [],
+                "safety": {
+                    "approved": False,
+                    "requires_human_review": True,
+                    "reason": "Nenhuma fonte foi recuperada.",
+                    "detected_issues": ["no_retrieved_sources"],
+                    "lexical_check_passed": False,
+                    "human_review_status": "pending",
+                },
+            }
+
+            log_event(
+                event="consultation_finished",
+                patient_code=patient_code,
+                question=safe_question,
+                safety=result["safety"],
+                status="no_sources",
+            )
+
+            return result
+
+        sources = [
+            {
+                "source": document.metadata.get("source"),
+                "url": document.metadata.get("source_url"),
+            }
+            for document in documents
+        ]
+
+        question_normalized = normalize_text(safe_question)
+
+        is_symptom_question = any(
+            term in question_normalized
+            for term in [
+                "sintoma",
+                "sintomas",
+                "sinais",
+                "symptom",
+                "symptoms",
+            ]
+        )
+
+        is_definition_question = any(
+            term in question_normalized
+            for term in [
+                "o que e",
+                "definicao",
+                "explique",
+                "what is",
+                "define",
+                "definition",
+                "explain",
+            ]
+        )
+
+        answer = None
+
+        if is_symptom_question:
+            for document in documents:
+                answer = translate_symptoms_from_source(
+                    document.page_content
+                )
+
+                if answer:
+                    break
+
+        elif is_definition_question:
+            for document in documents:
+                answer = translate_definition_from_source(
+                    document.page_content
+                )
+
+                if answer:
+                    break
+
+        if not answer:
+            answer = generate_llm_answer(
+                question=safe_question,
+                documents=documents,
+                patient_context=safe_patient_context,
+            )
+
+        log_event(
+            event="answer_generated",
+            patient_code=patient_code,
+            question=safe_question,
+            sources=sources,
+            status="success",
+        )
+
+        validation_sources = [
+            {"content": document.page_content}
+            for document in documents
+        ]
+
+        lexical_validation = validate_answer(
+            answer=answer,
+            sources=validation_sources,
+        )
+
+        safety_result = {
+            "approved": False,
+            "requires_human_review": True,
+            "reason": (
+                "Verificações automáticas executadas. "
+                "Elas não comprovam a precisão clínica. "
+                "Aprovação humana obrigatória."
+            ),
+            "detected_issues": lexical_validation["detected_issues"],
+            "lexical_check_passed": lexical_validation["lexical_check_passed"],
+            "human_review_status": "pending",
+        }
+
+        log_event(
+            event="answer_validated",
+            patient_code=patient_code,
+            question=safe_question,
+            sources=sources,
+            safety=safety_result,
+            status="pending_human_review",
+        )
+
+        log_event(
+            event="human_review_required",
+            patient_code=patient_code,
+            question=safe_question,
+            safety=safety_result,
+            status="pending",
+        )
+
+        result = {
+            "answer": answer,
+            "sources": sources,
+            "safety": safety_result,
+        }
+
+        log_event(
+            event="consultation_finished",
+            patient_code=patient_code,
+            question=safe_question,
+            sources=sources,
+            safety=safety_result,
+            status="success",
+        )
+
+        return result
+
+    except Exception as error:
+        log_error(
+            event="consultation_error",
+            error=error,
+            patient_code=patient_code,
+            question=safe_question,
+        )
+
+        raise

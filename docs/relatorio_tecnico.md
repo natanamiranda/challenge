@@ -1,207 +1,225 @@
+
 # Relatório Técnico — Medical AI Assistant
 
 ## 1. Resumo Executivo
 
-O Medical AI Assistant é um protótipo acadêmico de assistente médico baseado em inteligência artificial, desenvolvido para demonstrar a aplicação de técnicas de recuperação aumentada por geração (Retrieval-Augmented Generation — RAG), integração com modelos de linguagem locais e consulta a dados estruturados de pacientes fictícios.
+O Medical AI Assistant é um protótipo acadêmico de assistente de informação médica baseado em Inteligência Artificial Generativa, Retrieval-Augmented Generation (RAG), LangChain e LangGraph.
 
-A solução permite realizar perguntas sobre informações médicas, recuperar documentos de uma base de conhecimento, gerar respostas em português e apresentar as fontes utilizadas.
+A solução recupera informações de uma base de conhecimento médica, utiliza modelos de linguagem locais para geração de respostas e apresenta as fontes utilizadas. Também integra dados fictícios de pacientes armazenados em SQLite.
 
-O projeto também incorpora mecanismos de segurança para identificar expressões inadequadas, verificar correspondências lexicais com as fontes recuperadas e sinalizar a necessidade de revisão humana.
+Foram implementados mecanismos de anonimização, auditoria, verificações automatizadas de segurança e encaminhamento obrigatório para revisão humana.
 
-A aplicação foi desenvolvida em Python, utilizando LangChain, ChromaDB, Ollama, SQLite e Streamlit.
+O projeto também contempla um experimento de fine-tuning utilizando LoRA, com modelo e conjunto de treinamento independentes do modelo principal da aplicação.
+
+A solução foi desenvolvida em Python e utiliza Streamlit, ChromaDB, Ollama, SQLAlchemy, PyTorch, Transformers e PEFT.
+
+**Importante:** trata-se de um protótipo educacional. Não possui validação clínica e não deve ser utilizado para diagnóstico ou decisões médicas.
 
 ## 2. Introdução
 
 Modelos de linguagem podem facilitar o acesso a informações médicas, mas sua utilização nesse contexto apresenta desafios relacionados à confiabilidade, rastreabilidade das informações e possibilidade de geração de conteúdo incorreto.
 
-Uma abordagem para reduzir esses riscos é combinar modelos de linguagem com bases documentais externas, permitindo que as respostas sejam elaboradas a partir de informações recuperadas de fontes de referência.
+Uma abordagem para reduzir parte desses riscos é combinar modelos de linguagem com bases documentais externas, permitindo que as respostas sejam elaboradas com apoio de informações recuperadas.
 
-Nesse contexto, o Medical AI Assistant foi desenvolvido como uma solução experimental que integra recuperação de conhecimento médico, processamento de linguagem natural, consulta a dados fictícios de pacientes e verificações automatizadas de segurança.
+Nesse contexto, o Medical AI Assistant integra recuperação de conhecimento médico, processamento de linguagem natural, consulta a dados fictícios de pacientes e mecanismos de segurança.
+
+O projeto também explora técnicas de anonimização, auditoria e orquestração de processos com LangGraph.
 
 ## 3. Objetivos
 
-### 3.1. Objetivo geral
+### 3.1 Objetivo geral
 
-Desenvolver um assistente médico experimental capaz de recuperar informações de uma base de conhecimento, gerar respostas contextualizadas e apresentar mecanismos de segurança que apoiem a confiabilidade das informações disponibilizadas.
+Desenvolver um assistente experimental capaz de recuperar informações médicas, gerar respostas contextualizadas e apresentar mecanismos de segurança e rastreabilidade.
 
-### 3.2. Objetivos específicos
+### 3.2 Objetivos específicos
 
 - Implementar uma arquitetura RAG para recuperação de informações médicas.
 - Utilizar uma base de conhecimento médica pública.
 - Integrar um modelo de linguagem executado localmente.
-- Implementar consultas a dados estruturados de pacientes fictícios.
-- Apresentar fontes utilizadas na geração das respostas.
-- Implementar verificações automáticas de segurança.
-- Sinalizar respostas que necessitam de revisão humana.
-- Disponibilizar uma interface para interação e demonstração.
+- Utilizar LangChain para integração com o LLM.
+- Utilizar LangGraph para orquestração do workflow.
+- Consultar dados estruturados de pacientes fictícios.
+- Implementar anonimização de informações identificáveis.
+- Registrar eventos para auditoria.
+- Implementar verificações automatizadas de segurança.
+- Exigir revisão humana das respostas.
+- Experimentar fine-tuning utilizando LoRA.
+- Disponibilizar uma interface de interação com Streamlit.
+- Desenvolver testes automatizados com Pytest.
 
 ## 4. Arquitetura da solução
 
-A aplicação foi organizada em módulos para separar as responsabilidades de interface, processamento das perguntas, recuperação de documentos, geração de respostas, acesso aos dados dos pacientes e validação de segurança.
+A aplicação foi organizada em módulos independentes, separando interface, processamento, recuperação de documentos, geração de respostas, persistência de dados, segurança e auditoria.
 
-### 4.1. Componentes arquiteturais
+### 4.1 Componentes arquiteturais
 
 | Componente | Responsabilidade |
 |---|---|
-| Streamlit | Interface de interação com o usuário |
-| Assistant | Orquestração do processamento das perguntas e respostas |
-| RAG | Recuperação de documentos médicos relevantes |
+| Streamlit | Interface de interação |
+| Assistant | Coordenação do processamento das perguntas |
+| LangChain | Integração com o modelo de linguagem |
+| LangGraph | Orquestração do fluxo de processamento |
+| RAG | Recuperação de documentos relevantes |
 | ChromaDB | Armazenamento e busca vetorial |
+| MedQuAD | Base de conhecimento médica |
+| Ollama | Execução local dos modelos |
+| Qwen 2.5 3B | Modelo principal de geração |
 | Nomic Embed Text | Geração de embeddings |
-| Ollama / Qwen 2.5 3B | Execução local do modelo de linguagem |
 | SQLite | Persistência dos dados fictícios |
-| SQLAlchemy | Mapeamento objeto-relacional e acesso ao banco |
-| Safety | Verificações automáticas e sinalização de revisão humana |
+| SQLAlchemy | Mapeamento objeto-relacional |
+| Anonymization | Mascaramento de dados identificáveis |
+| Audit | Registro de eventos e erros |
+| Safety | Verificações lexicais e sinalização de riscos |
+| Patient Service | Consulta de pacientes fictícios |
 
-### 4.2. Diagrama da arquitetura
+### 4.2 Diagrama da arquitetura
 
 ```mermaid
-flowchart TB
-    U["Usuário"] --> UI["Interface Streamlit"]
-    UI --> A["Medical Assistant"]
-
-    A --> RAG["Módulo RAG"]
-    A --> PS["Serviço de pacientes"]
-    A --> SAFE["Módulo de segurança"]
-
-    subgraph KNOWLEDGE["Base de conhecimento"]
-        MED["MedQuAD"]
-        PREP["Preparação dos documentos"]
-        EMB["Nomic Embed Text"]
-        CHROMA[("ChromaDB")]
-        MED --> PREP --> EMB --> CHROMA
-    end
-
-    RAG --> CHROMA
-    RAG --> LLM["Ollama / Qwen 2.5 3B"]
-    A --> LLM
-
-    subgraph PATIENT["Dados estruturados"]
-        PS --> ORM["SQLAlchemy"]
-        ORM --> DB[("SQLite")]
-    end
-
-    LLM --> A
-    A --> SAFE
-    SAFE --> RESULT["Resposta, fontes e validação"]
-    RESULT --> REVIEW["Revisão humana obrigatória"]
-    REVIEW --> UI
+flowchart TD
+    A[Usuário] --> B[Dashboard Streamlit]
+    B --> C[Medical Assistant]
+    C --> D[Anonimização]
+    D --> E[LangChain]
+    E --> F[RAG]
+    F --> G[ChromaDB]
+    G --> H[Documentos MedQuAD]
+    E --> I[Ollama - Qwen 2.5 3B]
+    I --> J[Validação de Segurança]
+    J --> K[Auditoria]
+    K --> L[LangGraph]
+    L --> M[Revisão Humana]
+    M --> B
+    B --> N[Patient Service]
+    N --> O[SQLite]
 ```
+
+### 4.3 Fluxo de processamento
+
+1. O usuário envia uma pergunta pela interface.
+2. O sistema prepara e anonimiza a pergunta e o contexto do paciente.
+3. A camada RAG recupera documentos relevantes no ChromaDB.
+4. O assistente utiliza os documentos recuperados para elaborar a resposta.
+5. Perguntas específicas sobre sintomas e definições podem utilizar traduções controladas do conteúdo recuperado.
+6. Outras perguntas podem ser encaminhadas ao modelo local por meio do LangChain.
+7. O módulo Safety executa verificações automatizadas.
+8. O módulo Audit registra os eventos do processamento.
+9. O LangGraph orquestra o fluxo e sinaliza a necessidade de revisão humana.
+10. A interface apresenta a resposta, as fontes e o estado da revisão.
 
 ## 5. Base de conhecimento médica
 
-### 5.1. MedQuAD
+### 5.1 MedQuAD
 
-O projeto utiliza o conjunto de dados MedQuAD, que reúne perguntas e respostas relacionadas à saúde provenientes de fontes médicas reconhecidas.
+O projeto utiliza o conjunto de dados MedQuAD (Medical Question Answering Dataset), que reúne perguntas e respostas relacionadas à saúde provenientes de fontes médicas.
 
 A base foi utilizada como fonte de conhecimento para permitir a recuperação de informações relevantes durante o processamento das perguntas.
 
-O conjunto original contém milhares de registros. Para adequar o processamento aos recursos computacionais disponíveis, foi realizada uma preparação dos dados e uma seleção de documentos para indexação.
+O conjunto processado contém aproximadamente 16.406 registros.
 
-### 5.2. Preparação dos documentos
+### 5.2 Preparação dos documentos
 
-O processamento da base contempla:
+O processamento contempla:
 
-1. Leitura dos arquivos de origem.
-2. Extração das perguntas e respostas.
-3. Organização dos registros em formato estruturado.
-4. Preparação dos documentos para recuperação.
-5. Divisão do conteúdo em fragmentos.
-6. Geração de embeddings.
-7. Indexação dos fragmentos no ChromaDB.
+1. Leitura dos arquivos XML.
+2. Extração de perguntas e respostas.
+3. Organização dos registros e metadados.
+4. Remoção de registros inválidos.
+5. Preparação dos documentos.
+6. Divisão do conteúdo em fragmentos.
+7. Geração de embeddings.
+8. Indexação no ChromaDB.
 
-A base processada contém 16.406 registros. A indexação vetorial utilizada na versão atual foi realizada com uma seleção de 300 registros, resultando em aproximadamente 1.347 fragmentos.
+A indexação vetorial da versão atual utiliza uma seleção limitada de 300 registros, resultando em aproximadamente 1.347 fragmentos.
 
-Essa estratégia reduz o consumo de memória e o tempo necessário para execução em ambiente local.
+Essa seleção foi utilizada para adequar o processamento aos recursos computacionais disponíveis.
 
 ## 6. Implementação do RAG
 
-A arquitetura RAG permite recuperar documentos relevantes antes da geração da resposta.
+A arquitetura RAG recupera documentos relevantes antes da geração da resposta.
 
-O módulo implementado em `src/medical_assistant/rag.py` realiza a preparação da consulta, busca vetorial, filtragem e ordenação dos documentos recuperados.
+O módulo `src/medical_assistant/rag.py` realiza a busca vetorial utilizando embeddings produzidos pelo Nomic Embed Text.
 
-### 6.1. Etapas de recuperação
+### 6.1 Etapas de recuperação
 
 1. Recebimento da pergunta.
-2. Identificação do tipo de pergunta.
-3. Preparação da consulta de busca.
-4. Recuperação de documentos no ChromaDB.
-5. Aplicação de critérios de relevância.
-6. Remoção de documentos duplicados.
-7. Retorno dos documentos selecionados para o assistente.
+2. Preparação da consulta.
+3. Geração ou utilização dos embeddings.
+4. Busca semântica no ChromaDB.
+5. Recuperação dos documentos relevantes.
+6. Retorno dos documentos ao assistente.
 
-A recuperação utiliza embeddings produzidos pelo modelo Nomic Embed Text.
+O assistente utiliza os documentos recuperados como contexto para elaborar as respostas e apresentar as fontes correspondentes.
 
-O sistema também possui estratégias específicas para perguntas relacionadas à leucemia linfoblástica aguda em adultos, diferenciando consultas sobre definição e sintomas.
+### 6.2 Estratégias de resposta
 
-### 6.2. Limitações da recuperação
+Foram implementadas estratégias específicas para perguntas sobre sintomas e definições médicas.
 
-A qualidade da resposta depende diretamente da relevância e da completude dos documentos recuperados.
+Para esses casos, o sistema identifica expressões presentes nos documentos recuperados e utiliza traduções controladas para produzir respostas em português.
 
-Durante os testes, foi observado que uma consulta sobre definição da doença poderia recuperar somente uma parte de um documento dividido em três partes.
+Essa estratégia reduz a dependência de geração livre em determinados cenários.
 
-Por esse motivo, a implementação sinaliza quando a resposta utiliza apenas um trecho parcial, evitando apresentar esse conteúdo como uma definição completa.
+### 6.3 Limitações da recuperação
 
-## 7. Modelo de linguagem
+A qualidade da resposta depende da relevância e da completude dos documentos recuperados.
+
+Durante os testes, foi observado que uma consulta sobre definição poderia recuperar somente uma parte de um documento dividido em três partes.
+
+Por esse motivo, a implementação identifica esse cenário e apresenta uma observação sobre a limitação do trecho disponível.
+
+A base vetorial atual possui cobertura limitada e não representa a totalidade do conjunto MedQuAD.
+
+## 7. Modelo de linguagem e LangChain
 
 A geração de respostas utiliza o Ollama para executar localmente o modelo Qwen 2.5 3B.
 
-A integração foi implementada por meio do LangChain, permitindo encaminhar perguntas e documentos recuperados ao modelo.
+A integração foi implementada por meio do LangChain, utilizando `ChatOllama` para encaminhar o prompt ao modelo.
 
-A configuração utiliza temperatura zero para favorecer respostas mais consistentes e um limite de tokens para controlar o tamanho das gerações.
+A configuração utiliza:
 
-Foram estabelecidas instruções para:
+- Modelo: Qwen 2.5 3B.
+- Temperatura: zero.
+- Limite de geração: 350 tokens.
+- Execução local pelo Ollama.
 
-- Utilizar os documentos fornecidos como fonte de conhecimento.
+As instruções enviadas ao modelo incluem:
+
+- Utilizar exclusivamente os documentos fornecidos como fonte de conhecimento.
 - Não inventar informações clínicas.
 - Não realizar diagnósticos.
 - Não prescrever medicamentos ou tratamentos.
 - Informar quando os documentos forem insuficientes.
-- Utilizar português brasileiro.
-- Não tratar dados fictícios de pacientes como fonte de conhecimento médico.
+- Responder em português brasileiro.
+- Não utilizar o contexto do paciente como fonte de conhecimento médico.
 
-Para determinadas perguntas sobre definição e sintomas, também foram implementadas traduções controladas do conteúdo recuperado, reduzindo a dependência de geração livre do modelo.
+A integração também foi testada com modelos simulados nos testes automatizados, permitindo verificar o comportamento do processamento sem depender de chamadas reais ao Ollama.
 
-**Observação:** o projeto utiliza um modelo pré-treinado executado localmente. Não foi realizado fine-tuning do Qwen 2.5 3B nesta versão.
+## 8. Orquestração com LangGraph
 
-## 8. Banco de dados e contexto dos pacientes
+O módulo `src/medical_assistant/workflow.py` implementa um fluxo utilizando LangGraph.
 
-O projeto utiliza SQLite para armazenar dados fictícios de pacientes.
+O estado do workflow armazena informações como:
 
-A camada de persistência foi implementada com SQLAlchemy, utilizando modelos para representar:
+- Pergunta.
+- Contexto do paciente.
+- Resultado da geração.
+- Estado do processamento.
+- Informações de erro.
 
-- Pacientes.
-- Exames.
-- Alergias.
-- Condições clínicas.
+### 8.1 Etapas do workflow
 
-Foram cadastrados três pacientes fictícios para demonstrar a integração entre a recuperação de informações médicas e a consulta a dados estruturados.
+| Etapa | Responsabilidade |
+|---|---|
+| `prepare_consultation` | Preparar os dados da consulta |
+| `generate_response` | Executar a geração da resposta |
+| `route_after_generation` | Definir o próximo caminho do fluxo |
+| `human_review` | Sinalizar a necessidade de revisão humana |
+| `complete_workflow` | Finalizar o fluxo quando não houver necessidade de revisão |
 
-Os dados podem ser utilizados para contextualizar a interação e demonstrar consultas relacionadas a informações individuais.
+### 8.2 Revisão humana
 
-Os registros não representam pacientes reais e não devem ser interpretados como informações clínicas autênticas.
+No fluxo atual do assistente, as respostas permanecem pendentes de revisão humana.
 
-## 9. Segurança e confiabilidade
-
-Considerando a natureza sensível das informações médicas, foi implementado um módulo de segurança em `src/medical_assistant/safety.py`.
-
-O módulo realiza verificações automáticas sobre o conteúdo gerado.
-
-### 9.1. Verificações implementadas
-
-- Identificação de expressões inadequadas.
-- Identificação de afirmações clínicas sensíveis.
-- Verificação lexical de termos da resposta em relação às fontes recuperadas.
-- Identificação de ausência de documentos de referência.
-- Sinalização de necessidade de revisão humana.
-
-### 9.2. Revisão humana
-
-A aplicação não realiza aprovação clínica automática.
-
-Mesmo quando as verificações lexicais não identificam problemas, a resposta permanece pendente de revisão humana.
-
-Os estados utilizados incluem:
+Os estados de segurança incluem:
 
 ```python
 approved = False
@@ -209,127 +227,311 @@ requires_human_review = True
 human_review_status = "pending"
 ```
 
-A validação lexical é uma verificação automatizada limitada. Ela não comprova que uma resposta esteja semanticamente correta, clinicamente completa ou adequada para orientar decisões médicas.
+O workflow também possui um caminho de conclusão condicional, testado de forma isolada.
 
-### 9.3. Limitações de segurança
+O protótipo não implementa um mecanismo persistente de aprovação ou rejeição por profissionais de saúde.
 
-O módulo atual não substitui uma avaliação clínica especializada.
+## 9. Banco de dados e contexto dos pacientes
 
-Também não implementa um fluxo completo de aprovação ou rejeição de respostas dentro do dashboard, nem um sistema persistente de auditoria clínica.
+O projeto utiliza SQLite para armazenar dados fictícios de pacientes.
 
-Essas funcionalidades são consideradas oportunidades de evolução.
+A camada de persistência utiliza SQLAlchemy e contempla entidades relacionadas a:
 
-## 10. Interface da aplicação
+- Pacientes.
+- Exames.
+- Alergias.
+- Condições clínicas.
 
-A interface foi desenvolvida utilizando Streamlit.
+Os dados são utilizados para demonstrar a integração entre informações estruturadas e o assistente.
+
+Todos os registros empregados na demonstração são fictícios e não representam pacientes reais.
+
+## 10. Anonimização de dados
+
+O módulo `src/medical_assistant/anonymization.py` implementa funções para mascaramento de informações identificáveis.
+
+### 10.1 Dados tratados
+
+A implementação contempla padrões para:
+
+- E-mails.
+- CPF.
+- CNPJ.
+- Telefones.
+- CEP.
+- Nomes identificados em campos específicos.
+- Datas de nascimento identificadas em campos específicos.
+
+### 10.2 Aplicação no processamento
+
+Antes da recuperação de documentos e da geração de respostas, a pergunta e o contexto do paciente passam pelo processo de anonimização.
+
+O tratamento também é aplicado recursivamente a estruturas como dicionários, listas e tuplas.
+
+### 10.3 Limitações
+
+A implementação utiliza padrões e regras de identificação. Portanto, não garante anonimização completa.
+
+Informações pessoais em texto livre que não correspondam aos padrões implementados podem permanecer no conteúdo.
+
+A solução é uma camada demonstrativa de proteção e não representa certificação de conformidade com LGPD, HIPAA ou outros padrões regulatórios.
+
+## 11. Auditoria e rastreabilidade
+
+O módulo `src/medical_assistant/audit.py` registra eventos do processamento em arquivos JSONL.
+
+### 11.1 Eventos registrados
+
+Entre os eventos contemplados estão:
+
+- Início de consulta.
+- Recuperação de documentos.
+- Geração de resposta.
+- Validação de segurança.
+- Necessidade de revisão humana.
+- Conclusão da consulta.
+- Erros de processamento.
+
+### 11.2 Proteção dos registros
+
+A implementação utiliza SHA-256 para representar referências de pacientes e perguntas por meio de hashes.
+
+Os registros de erro evitam armazenar a mensagem detalhada da exceção, reduzindo o risco de exposição acidental de informações.
+
+Os arquivos são armazenados localmente no diretório:
+
+```text
+outputs/audit/
+```
+
+A auditoria é uma implementação demonstrativa e não substitui um sistema corporativo de gestão de logs, controle de acesso ou retenção de dados.
+
+## 12. Fine-tuning experimental com LoRA
+
+Foi desenvolvido um experimento de fine-tuning utilizando a técnica LoRA (Low-Rank Adaptation), por meio das bibliotecas Transformers e PEFT.
+
+O experimento utiliza um modelo separado do modelo principal da aplicação.
+
+### 12.1 Configuração experimental
+
+| Parâmetro | Configuração |
+|---|---|
+| Modelo base | HuggingFaceTB/SmolLM2-135M-Instruct |
+| Técnica | LoRA |
+| Biblioteca de treinamento | Transformers e PEFT |
+| Framework | PyTorch |
+| Dispositivo | CPU |
+| Amostra de treinamento | 128 exemplos |
+| Amostra de validação | 32 exemplos |
+| Épocas | 1 |
+| Batch size | 1 |
+| Learning rate | 0.0002 |
+| Sequência máxima | 256 tokens |
+| Rank LoRA | 4 |
+| Alpha LoRA | 8 |
+| Dropout LoRA | 0.05 |
+
+O treinamento foi realizado com os módulos de projeção `q_proj` e `v_proj`.
+
+### 12.2 Dataset
+
+O script de preparação do dataset processou os registros MedQuAD e gerou:
+
+- 16.208 exemplos válidos.
+- 14.588 exemplos de treinamento.
+- 1.620 exemplos de validação.
+- 154 registros rejeitados.
+
+Para o experimento de treinamento, foi utilizada uma amostra reduzida de 128 exemplos de treinamento e 32 de validação, considerando os recursos computacionais disponíveis.
+
+### 12.3 Resultado do treinamento
+
+O treinamento apresentou:
+
+- Loss de treinamento: aproximadamente 2,2167.
+- Loss de validação: aproximadamente 2,0599.
+- Parâmetros treináveis: 230.400.
+- Total de parâmetros: 134.745.408.
+- Proporção de parâmetros treináveis: aproximadamente 0,171%.
+
+O adaptador foi salvo em:
+
+```text
+outputs/finetuning/smollm2-lora/
+```
+
+Os relatórios foram armazenados em:
+
+```text
+outputs/finetuning/
+```
+
+### 12.4 Avaliação e limitações
+
+Foi realizada uma comparação experimental entre o modelo base e o modelo com adaptador LoRA.
+
+As respostas apresentaram diferenças de conteúdo, mas os resultados não permitem concluir que houve melhoria consistente da qualidade.
+
+O experimento demonstra a execução técnica do fine-tuning, mas não comprova precisão médica, superioridade do modelo ajustado ou adequação para uso clínico.
+
+O modelo experimental não substitui o Qwen 2.5 3B utilizado pelo assistente principal e não está integrado automaticamente ao fluxo de produção do protótipo.
+
+## 13. Segurança e confiabilidade
+
+O módulo `src/medical_assistant/safety.py` realiza verificações automatizadas sobre o conteúdo produzido.
+
+### 13.1 Verificações implementadas
+
+- Identificação de expressões inadequadas.
+- Identificação de afirmações clínicas sensíveis.
+- Verificação lexical de termos em relação às fontes.
+- Identificação de respostas sem documentos recuperados.
+- Sinalização de necessidade de revisão humana.
+
+### 13.2 Revisão humana obrigatória
+
+Mesmo quando as verificações automáticas não identificam problemas, a resposta permanece pendente de revisão humana.
+
+As verificações lexicais não comprovam precisão semântica, factual ou clínica.
+
+A solução não implementa aprovação clínica automática nem um processo persistente de aprovação ou rejeição no dashboard.
+
+## 14. Interface da aplicação
+
+A interface foi desenvolvida com Streamlit.
 
 O dashboard permite:
 
 - Selecionar pacientes fictícios.
-- Visualizar informações cadastrais e condições registradas.
-- Consultar alergias.
-- Visualizar exames e seus respectivos status.
+- Visualizar informações dos pacientes.
+- Consultar alergias e condições cadastradas.
+- Visualizar exames e seus status.
 - Enviar perguntas ao assistente.
-- Visualizar respostas geradas.
-- Consultar as fontes utilizadas.
-- Visualizar o resultado das verificações de segurança.
+- Visualizar respostas.
+- Consultar as fontes recuperadas.
 - Identificar a necessidade de revisão humana.
 
-A interface foi desenvolvida para facilitar a demonstração dos componentes integrados e do fluxo de processamento da aplicação.
+A interface facilita a demonstração dos componentes integrados e do fluxo de processamento.
 
-## 11. Avaliação e testes
+## 15. Testes automatizados
 
-Foram desenvolvidos scripts específicos para avaliar a recuperação de documentos, o funcionamento do assistente, as consultas aos pacientes e as verificações de segurança.
+O projeto utiliza Pytest para validar os principais componentes.
 
-### 11.1. Scripts de teste
+A suíte automatizada está organizada no diretório `tests/`.
 
-| Script | Finalidade |
+### 15.1 Arquivos de teste
+
+| Arquivo | Objetivo |
 |---|---|
-| `test_rag.py` | Verificar a recuperação de documentos |
-| `test_retrieval_quality.py` | Avaliar a qualidade da recuperação |
-| `test_assistant.py` | Verificar a geração de respostas |
-| `test_safety.py` | Testar as verificações de segurança |
-| `test_patient_service.py` | Validar as consultas de pacientes |
-| `evaluate_assistant.py` | Avaliar geração e segurança |
-| `check_vector_db.py` | Verificar a base vetorial |
+| `test_anonymization.py` | Validar anonimização e tratamento recursivo |
+| `test_audit.py` | Validar hashes e registros de auditoria |
+| `test_langchain_integration.py` | Validar os fluxos do assistente e a integração simulada com LangChain |
+| `test_safety.py` | Validar verificações de segurança |
+| `test_workflow.py` | Validar o fluxo e o roteamento LangGraph |
 
-### 11.2. Cenários avaliados
+### 15.2 Cenários cobertos
 
-Foram executados testes com perguntas sobre:
+Os testes verificam:
 
-- Definição da leucemia linfoblástica aguda em adultos.
-- Sinais e sintomas da leucemia linfoblástica aguda em adultos.
+- Remoção de e-mails, CPF, CNPJ e CEP.
+- Anonimização de estruturas aninhadas.
+- Geração de hashes.
+- Registro de eventos de auditoria.
+- Tratamento seguro de erros.
+- Rejeição de perguntas vazias.
+- Comportamento quando não existem documentos recuperados.
+- Respostas sobre sintomas e definições.
+- Uso de contexto anonimizado antes da geração.
+- Encaminhamento para revisão humana.
+- Roteamento condicional do LangGraph.
 
-Nos resultados observados:
+### 15.3 Resultado dos testes
 
-- A resposta sobre sintomas apresentou informações recuperadas da fonte médica.
-- A resposta sobre definição utilizou conteúdo recuperado, com indicação explícita de que o documento disponível correspondia apenas à terceira parte de um conjunto de três partes.
-- As verificações lexicais não identificaram problemas nos dois cenários avaliados.
-- A aprovação automática permaneceu desabilitada.
-- A revisão humana permaneceu obrigatória.
+Na execução registrada durante o desenvolvimento:
 
-### 11.3. Interpretação dos resultados
+```text
+========================
+26 passed in 10.00s
+========================
+```
 
-Os resultados demonstram o funcionamento integrado dos componentes de recuperação, geração e verificação lexical nos cenários testados.
+Os 26 testes foram aprovados.
 
-Entretanto, a ausência de problemas lexicais não representa comprovação de precisão clínica.
+Os testes de integração com LangChain utilizam mocks para simular o RAG e o modelo de linguagem, permitindo verificar os comportamentos sem depender de inferência real pelo Ollama.
 
-A avaliação realizada é experimental e possui escopo limitado. São necessários mais cenários, métricas de recuperação e avaliação especializada para determinar a confiabilidade da solução.
+Os testes automatizados representam os cenários implementados e não constituem validação clínica ou garantia de ausência de erros.
 
-## 12. Tecnologias utilizadas
+## 16. Tecnologias utilizadas
 
 | Tecnologia | Aplicação |
 |---|---|
 | Python 3.11 | Linguagem principal |
-| LangChain | Integração e orquestração do modelo |
-| Ollama | Execução local do modelo de linguagem |
-| Qwen 2.5 3B | Geração de respostas |
-| Nomic Embed Text | Geração de embeddings |
+| LangChain | Integração com o LLM |
+| LangGraph | Orquestração do workflow |
+| Ollama | Inferência local |
+| Qwen 2.5 3B | Modelo principal |
+| Nomic Embed Text | Embeddings |
 | ChromaDB | Banco vetorial |
-| SQLite | Banco de dados relacional |
-| SQLAlchemy | Persistência e consultas estruturadas |
-| Streamlit | Interface web |
-| MedQuAD | Base de conhecimento médica |
+| SQLite | Persistência relacional |
+| SQLAlchemy | ORM |
+| Streamlit | Interface |
+| Hugging Face Transformers | Fine-tuning experimental |
+| PEFT / LoRA | Ajuste eficiente de parâmetros |
+| PyTorch | Treinamento |
+| Pytest | Testes automatizados |
 
-## 13. Limitações e trabalhos futuros
+## 17. Limitações e trabalhos futuros
 
-A versão atual é um protótipo acadêmico e possui limitações que devem ser consideradas.
+A versão atual é um protótipo acadêmico e apresenta limitações:
 
-Entre as principais oportunidades de evolução estão:
+- A base vetorial contém uma seleção limitada de documentos.
+- A qualidade depende dos documentos recuperados.
+- A validação de segurança é predominantemente lexical.
+- A anonimização não garante remoção de toda informação identificável.
+- O modelo pode gerar respostas incorretas ou incompletas.
+- O fine-tuning não foi validado para uso clínico.
+- O adaptador LoRA não está integrado ao modelo principal.
+- Não existe aprovação clínica automática.
+- Não existe fluxo persistente de aprovação ou rejeição humana.
+- A auditoria não substitui uma solução corporativa de observabilidade e governança.
+
+Como evolução, podem ser considerados:
 
 - Ampliar a cobertura da base vetorial.
-- Melhorar a recuperação de documentos relacionados e complementares.
-- Implementar recuperação de documentos por partes relacionadas.
-- Avaliar modelos de linguagem e estratégias de geração alternativas.
-- Realizar fine-tuning, caso haja dados e metodologia adequados.
-- Avaliar a utilização de LangGraph para fluxos mais complexos.
-- Implementar auditoria persistente das interações.
-- Desenvolver um fluxo de aprovação humana dentro da aplicação.
+- Implementar avaliação de recuperação com métricas específicas.
+- Melhorar a recuperação de documentos complementares.
+- Avaliar diferentes modelos e estratégias de geração.
 - Ampliar os testes automatizados.
-- Realizar avaliação semântica e clínica com profissionais qualificados.
+- Implementar revisão humana persistente.
+- Aprimorar o monitoramento e a auditoria.
+- Realizar avaliação especializada das respostas.
 
-Essas funcionalidades não são consideradas implementadas na versão atual.
+## 18. Conclusão
 
-## 14. Conclusão
+O Medical AI Assistant demonstra a integração de Inteligência Artificial Generativa, RAG, LangChain, LangGraph e modelos locais em uma aplicação acadêmica de informação médica.
 
-O Medical AI Assistant demonstra a integração de recuperação aumentada por geração, modelos de linguagem locais, dados estruturados e verificações automatizadas de segurança em um protótipo de assistente médico.
+A solução combina recuperação semântica, consulta a dados estruturados, anonimização, auditoria e verificações automatizadas de segurança.
 
-A solução permite consultar informações médicas provenientes de uma base de conhecimento, contextualizar interações com dados fictícios de pacientes e apresentar as fontes utilizadas na geração das respostas.
+O projeto também apresenta um experimento de fine-tuning com LoRA e uma suíte de testes automatizados para validar os principais componentes.
 
-A implementação também evidencia a importância de limitar a autonomia de sistemas de inteligência artificial em contextos médicos, mantendo a revisão humana como requisito obrigatório.
+Os resultados demonstram o funcionamento técnico dos fluxos implementados nos cenários avaliados. Entretanto, a solução não possui validação clínica e mantém a revisão humana como requisito obrigatório.
 
-Apesar dos resultados funcionais obtidos nos testes experimentais, o sistema não está validado para uso clínico ou tomada de decisão médica.
+## 19. Referências
 
-## 15. Referências
-
-BEN ABACHA, Asma; DEMNER-FUSHMAN, Dina. A Question-Entailment Approach to Question Answering. *BMC Bioinformatics*, 2019.
+BEN ABACHA, Asma; DEMNER-FUSHMAN, Dina. A Question-Entailment Approach to Question Answering. BMC Bioinformatics, 2019.
 
 MedQuAD — Medical Question Answering Dataset. Disponível em: https://github.com/abachaa/MedQuAD
 
 LangChain Documentation. Disponível em: https://python.langchain.com/
+
+LangGraph Documentation. Disponível em: https://langchain-ai.github.io/langgraph/
 
 Ollama Documentation. Disponível em: https://ollama.com/
 
 ChromaDB Documentation. Disponível em: https://docs.trychroma.com/
 
 Streamlit Documentation. Disponível em: https://docs.streamlit.io/
+
+Hugging Face Documentation. Disponível em: https://huggingface.co/docs
+
+PEFT Documentation. Disponível em: https://huggingface.co/docs/peft

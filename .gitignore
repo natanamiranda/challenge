@@ -31,3 +31,4 @@ outputs/*
 
 # Notebooks e cache
 .ipynb_checkpoints/
+data/finetuning/
